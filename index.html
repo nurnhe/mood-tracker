@@ -80,6 +80,18 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
 .status { color: var(--muted); font-size: 0.88rem; }
 button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+.daylist { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.slot { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 3px 12px 3px 4px; font: inherit; font-size: 0.88rem; font-variant-numeric: tabular-nums; cursor: pointer; }
+.slot svg { width: 24px; height: 24px; }
+.slot[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+.slot.new { padding: 6px 12px; border-style: dashed; color: var(--muted); }
+.slot.new[aria-pressed="true"] { color: var(--fg); }
+.formhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 16px; }
+.formhead h3 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 1rem; }
+.timefield { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.9rem; }
+.timefield input { border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 4px 8px; font: inherit; font-variant-numeric: tabular-nums; }
+.count { position: absolute; top: 3px; right: 5px; font-size: 0.62rem; font-weight: 700; line-height: 1; }
+
 /* calendar */
 .calhead { display: flex; align-items: center; gap: 8px; }
 .calhead h2 { flex: 1; }
@@ -128,6 +140,11 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
         <h2 id="dateTitle">Today</h2>
         <button class="iconbtn" id="nextDay" aria-label="Next day">›</button>
       </div>
+      <div class="daylist" id="dayList" hidden></div>
+      <div class="formhead">
+        <h3 id="formTitle">New check-in</h3>
+        <label class="timefield"><span>at</span><input type="time" id="time" aria-label="Check-in time"></label>
+      </div>
       <div>
         <p class="label">Mood</p>
         <div class="faces" id="faces" role="group" aria-label="Mood from 1 to 5"></div>
@@ -138,13 +155,13 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
       </div>
       <div>
         <p class="label"><label for="note">Note</label></p>
-        <textarea id="note" placeholder="Anything worth remembering about the day? (optional)"></textarea>
+        <textarea id="note" placeholder="Anything worth remembering? (optional)"></textarea>
       </div>
       <div class="actions">
         <button class="primary" id="save" disabled>Save check-in</button>
         <button class="ghost danger" id="del" hidden>Remove</button>
         <span id="confirm" hidden>
-          <span class="status">Remove this day's check-in?</span>
+          <span class="status">Remove this check-in?</span>
           <button class="ghost danger" id="delYes">Yes, remove</button>
           <button class="ghost" id="delNo">Keep it</button>
         </span>
@@ -169,7 +186,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
   </div>
 
   <section class="card" aria-labelledby="recentTitle">
-    <h2 id="recentTitle">Recent days</h2>
+    <h2 id="recentTitle">Recent check-ins</h2>
     <div class="recent" id="recent"><p class="empty">Loading your check-ins…</p></div>
   </section>
 </div>
@@ -190,6 +207,7 @@ const pad = (n) => String(n).padStart(2, "0");
 const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parseKey = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
 const todayKey = () => keyOf(new Date());
+const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const addDays = (k, n) => { const d = parseKey(k); d.setDate(d.getDate() + n); return keyOf(d); };
 
 function faceSVG(mood, size = 54) {
@@ -204,8 +222,20 @@ function faceSVG(mood, size = 54) {
 }
 
 // ---------- storage ----------
+// One document per check-in. Ids are "<date>_<suffix>"; early check-ins used the bare date as id and have no time.
 let entries = new Map();
+let days = new Map();
 let store = null;
+
+function rebuildDays() {
+  days = new Map();
+  entries.forEach((e, id) => {
+    if (!days.has(e.date)) days.set(e.date, []);
+    days.get(e.date).push({ id, ...e });
+  });
+  days.forEach((list) => list.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
+}
+const dayAvg = (k) => { const l = days.get(k); return l ? l.reduce((a, e) => a + e.mood, 0) / l.length : 0; };
 
 function localStore() {
   const K = "mood-log-entries";
@@ -214,8 +244,8 @@ function localStore() {
   let listener = () => {};
   return {
     subscribe(fn) { listener = fn; fn(read()); },
-    async save(k, data) { const o = read(); o[k] = data; write(o); listener(o); },
-    async remove(k) { const o = read(); delete o[k]; write(o); listener(o); },
+    async save(id, data) { const o = read(); o[id] = data; write(o); listener(o); },
+    async remove(id) { const o = read(); delete o[id]; write(o); listener(o); },
   };
 }
 
@@ -229,8 +259,8 @@ function dbStore(db) {
         fn(o);
       }, () => showBanner("Couldn't load your check-ins right now. Reload the page to try again."));
     },
-    save: (k, data) => col.doc(k).set(data),
-    remove: (k) => col.doc(k).delete(),
+    save: (id, data) => col.doc(id).set(data),
+    remove: (id) => col.doc(id).delete(),
   };
 }
 
@@ -245,7 +275,8 @@ async function initStore() {
     showBanner("Your account storage isn't available in this view, so check-ins are saved in this browser only.");
   }
   store.subscribe((o) => {
-    entries = new Map(Object.entries(o));
+    entries = new Map(Object.entries(o).filter(([, e]) => e && e.date && e.mood));
+    rebuildDays();
     if (!dirty) loadForm();
     renderAll();
   });
@@ -253,14 +284,22 @@ async function initStore() {
 
 // ---------- form state ----------
 let selected = todayKey();
+let editingId = null; // null means a new check-in
 let viewMonth = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
-let form = { mood: 0, tags: new Set(), note: "" };
+let form = { mood: 0, tags: new Set(), note: "", time: "" };
 let dirty = false;
 
 function loadForm() {
-  const e = entries.get(selected);
-  form = { mood: e?.mood || 0, tags: new Set(e?.tags || []), note: e?.note || "" };
+  if (editingId && !entries.has(editingId)) editingId = null;
+  const e = editingId ? entries.get(editingId) : null;
+  form = {
+    mood: e?.mood || 0,
+    tags: new Set(e?.tags || []),
+    note: e?.note || "",
+    time: e ? e.time || "" : selected === todayKey() ? nowTime() : "",
+  };
   $("note").value = form.note;
+  $("time").value = form.time;
   dirty = false;
   $("saveStatus").textContent = "";
   hideConfirm();
@@ -281,19 +320,24 @@ function renderForm() {
   $("dateTitle").textContent = label ? `${label} · ${long.split(",")[0]}` : long;
   $("nextDay").disabled = selected >= tk;
 
+  const list = days.get(selected) || [];
+  $("dayList").hidden = !list.length;
+  $("dayList").innerHTML = list.map((e) =>
+    `<button class="slot" data-id="${escapeAttr(e.id)}" aria-pressed="${e.id === editingId}" aria-label="Edit ${e.time || "untimed"} check-in, ${MOODS[e.mood - 1].label}">${faceSVG(e.mood, 24)}${e.time || MOODS[e.mood - 1].label}</button>`
+  ).join("") + `<button class="slot new" id="newCheckin" aria-pressed="${editingId === null}">+ New check-in</button>`;
+  $("formTitle").textContent = editingId ? "Edit check-in" : list.length ? "Another check-in" : "New check-in";
+
   $("faces").innerHTML = MOODS.map((m) =>
     `<button class="face" data-mood="${m.v}" aria-pressed="${form.mood === m.v}" aria-label="${m.v}, ${m.label}">${faceSVG(m.v)}<span>${m.label}</span></button>`
   ).join("");
 
-  const tagsEl = $("tags");
-  tagsEl.innerHTML = allTags().map((t) =>
+  $("tags").innerHTML = allTags().map((t) =>
     `<button class="chip" data-tag="${escapeAttr(t)}" aria-pressed="${form.tags.has(t)}">${escapeHTML(t)}</button>`
   ).join("") + `<input class="addtag" id="addTag" placeholder="+ add your own" aria-label="Add your own feeling" maxlength="24">`;
 
-  const exists = entries.has(selected);
-  $("save").textContent = exists ? "Update check-in" : "Save check-in";
-  $("save").disabled = !form.mood || (exists && !dirty);
-  $("del").hidden = !exists || !$("confirm").hidden;
+  $("save").textContent = editingId ? "Update check-in" : "Save check-in";
+  $("save").disabled = !form.mood || (editingId && !dirty);
+  $("del").hidden = !editingId || !$("confirm").hidden;
 }
 
 function escapeHTML(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -307,48 +351,50 @@ function renderCalendar() {
   $("monthTitle").textContent = viewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const now = new Date();
   $("nextMonth").disabled = y > now.getFullYear() || (y === now.getFullYear() && m >= now.getMonth());
-  const first = new Date(y, m, 1);
-  const lead = (first.getDay() + 6) % 7; // Monday first
-  const days = new Date(y, m + 1, 0).getDate();
+  const lead = (new Date(y, m, 1).getDay() + 6) % 7; // Monday first
+  const count = new Date(y, m + 1, 0).getDate();
   const tk = todayKey();
   const dows = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => `<div class="dow">${d}</div>`).join("");
   let cells = "";
   for (let i = 0; i < lead; i++) cells += `<div class="day blank"></div>`;
-  for (let d = 1; d <= days; d++) {
+  for (let d = 1; d <= count; d++) {
     const k = `${y}-${pad(m + 1)}-${pad(d)}`;
-    const e = entries.get(k);
-    const cls = ["day", e ? "filled" : "", k === tk ? "today" : "", k === selected ? "sel" : "", k > tk ? "future" : ""].join(" ");
-    const style = e ? ` style="background:${MOODS[e.mood - 1].color}"` : "";
-    const aria = e ? `${k}, ${MOODS[e.mood - 1].label}` : k;
-    cells += `<button class="${cls}" data-key="${k}"${style} ${k > tk ? "disabled" : ""} aria-label="${aria}">${d}</button>`;
+    const list = days.get(k);
+    const mood = list ? MOODS[Math.round(dayAvg(k)) - 1] : null;
+    const cls = ["day", list ? "filled" : "", k === tk ? "today" : "", k === selected ? "sel" : "", k > tk ? "future" : ""].join(" ");
+    const style = mood ? ` style="background:${mood.color}"` : "";
+    const aria = list ? `${k}, ${mood.label}${list.length > 1 ? `, ${list.length} check-ins` : ""}` : k;
+    const badge = list && list.length > 1 ? `<span class="count" aria-hidden="true">${list.length}</span>` : "";
+    cells += `<button class="${cls}" data-key="${k}"${style} ${k > tk ? "disabled" : ""} aria-label="${aria}">${d}${badge}</button>`;
   }
   $("cal").innerHTML = dows + cells;
 
-  const monthEntries = [...entries.entries()].filter(([k]) => k.startsWith(`${y}-${pad(m + 1)}`)).map(([, e]) => e);
-  $("sCount").textContent = monthEntries.length;
-  $("sAvg").textContent = monthEntries.length ? (monthEntries.reduce((a, e) => a + e.mood, 0) / monthEntries.length).toFixed(1) : "–";
+  const prefix = `${y}-${pad(m + 1)}`;
+  const monthDays = [...days.keys()].filter((k) => k.startsWith(prefix));
+  $("sCount").textContent = monthDays.length;
+  $("sAvg").textContent = monthDays.length ? (monthDays.reduce((a, k) => a + dayAvg(k), 0) / monthDays.length).toFixed(1) : "–";
   const counts = {};
-  monthEntries.forEach((e) => (e.tags || []).forEach((t) => (counts[t] = (counts[t] || 0) + 1)));
+  monthDays.forEach((k) => days.get(k).forEach((e) => (e.tags || []).forEach((t) => (counts[t] = (counts[t] || 0) + 1))));
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
   $("sTag").textContent = top ? top[0] : "–";
 }
 
 function renderLegend() {
-  $("legend").innerHTML = MOODS.map((m) => `<span><i style="background:${m.color}"></i>${m.label}</span>`).join("");
+  $("legend").innerHTML = MOODS.map((m) => `<span><i style="background:${m.color}"></i>${m.label}</span>`).join("") +
+    `<span>Days with several check-ins show their average</span>`;
 }
 
 function renderRecent() {
-  const keys = [...entries.keys()].sort().reverse().slice(0, 7);
-  if (!keys.length) {
-    $("recent").innerHTML = `<p class="empty">No check-ins yet. Pick a face above to log today, and your days will start filling the calendar.</p>`;
+  const all = [...days.values()].flat().sort((a, b) => (b.date + (b.time || "")).localeCompare(a.date + (a.time || ""))).slice(0, 8);
+  if (!all.length) {
+    $("recent").innerHTML = `<p class="empty">No check-ins yet. Pick a face above to log how you feel, and your days will start filling the calendar.</p>`;
     return;
   }
-  $("recent").innerHTML = keys.map((k) => {
-    const e = entries.get(k);
-    const when = parseKey(k).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  $("recent").innerHTML = all.map((e) => {
+    const when = parseKey(e.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
     const tags = (e.tags || []).join(" · ");
-    return `<button class="row" data-key="${k}">${faceSVG(e.mood, 40)}<div>
-      <div class="when">${when} · ${MOODS[e.mood - 1].label}</div>
+    return `<button class="row" data-key="${e.date}" data-id="${escapeAttr(e.id)}">${faceSVG(e.mood, 40)}<div>
+      <div class="when">${when}${e.time ? ` · ${e.time}` : ""} · ${MOODS[e.mood - 1].label}</div>
       ${tags ? `<div class="tags">${escapeHTML(tags)}</div>` : ""}
       ${e.note ? `<p class="note">${escapeHTML(e.note)}</p>` : ""}
     </div></button>`;
@@ -356,18 +402,23 @@ function renderRecent() {
 }
 
 function renderStreak() {
-  let k = entries.has(todayKey()) ? todayKey() : addDays(todayKey(), -1);
+  const tk = todayKey();
+  let k = days.has(tk) ? tk : addDays(tk, -1);
   let n = 0;
-  while (entries.has(k)) { n++; k = addDays(k, -1); }
+  while (days.has(k)) { n++; k = addDays(k, -1); }
   $("streak").textContent = n ? `${n}-day streak` : "";
-  $("greeting").textContent = entries.has(todayKey()) ? "Today is logged. You can still change it." : "How did today feel?";
+  const today = (days.get(tk) || []).length;
+  $("greeting").textContent = today === 0 ? "How are you feeling?"
+    : today === 1 ? "One check-in today. Add another whenever your mood shifts."
+    : `${today} check-ins today. Add another whenever your mood shifts.`;
 }
 
 function renderAll() { renderForm(); renderCalendar(); renderRecent(); renderStreak(); }
 
-function selectDate(k) {
+function selectDate(k, id = null) {
   if (k > todayKey()) return;
   selected = k;
+  editingId = id;
   const d = parseKey(k);
   viewMonth = new Date(d.getFullYear(), d.getMonth(), 1);
   loadForm();
@@ -381,6 +432,11 @@ function toast(t) {
 }
 
 // ---------- events ----------
+$("dayList").addEventListener("click", (e) => {
+  const b = e.target.closest(".slot"); if (!b) return;
+  editingId = b.id === "newCheckin" ? null : b.dataset.id;
+  loadForm(); renderForm();
+});
 $("faces").addEventListener("click", (e) => {
   const b = e.target.closest("[data-mood]"); if (!b) return;
   form.mood = Number(b.dataset.mood); dirty = true; renderForm();
@@ -400,14 +456,17 @@ $("tags").addEventListener("keydown", (e) => {
   $("addTag").focus();
 });
 $("note").addEventListener("input", () => { form.note = $("note").value; dirty = true; renderForm(); });
+$("time").addEventListener("input", () => { form.time = $("time").value; dirty = true; renderForm(); });
 $("save").addEventListener("click", async () => {
   if (!form.mood) return;
-  const data = { date: selected, mood: form.mood, tags: [...form.tags], note: form.note.trim(), updatedAt: new Date().toISOString() };
+  const id = editingId || `${selected}_${Date.now().toString(36)}`;
+  const data = { date: selected, time: form.time, mood: form.mood, tags: [...form.tags], note: form.note.trim(), updatedAt: new Date().toISOString() };
   $("save").disabled = true;
   $("saveStatus").textContent = "Saving…";
   try {
     dirty = false;
-    await store.save(selected, data);
+    editingId = id;
+    await store.save(id, data);
     $("saveStatus").textContent = "";
     toast("Check-in saved");
   } catch (err) {
@@ -420,7 +479,7 @@ $("del").addEventListener("click", () => { $("confirm").hidden = false; $("del")
 $("delNo").addEventListener("click", () => { hideConfirm(); renderForm(); });
 $("delYes").addEventListener("click", async () => {
   hideConfirm();
-  try { await store.remove(selected); dirty = false; loadForm(); renderAll(); toast("Check-in removed"); }
+  try { await store.remove(editingId); editingId = null; dirty = false; loadForm(); renderAll(); toast("Check-in removed"); }
   catch { $("saveStatus").textContent = "Couldn't remove it. Try again."; renderForm(); }
 });
 $("prevDay").addEventListener("click", () => selectDate(addDays(selected, -1)));
@@ -428,7 +487,7 @@ $("nextDay").addEventListener("click", () => selectDate(addDays(selected, 1)));
 $("prevMonth").addEventListener("click", () => { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1); renderCalendar(); });
 $("nextMonth").addEventListener("click", () => { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); renderCalendar(); });
 $("cal").addEventListener("click", (e) => { const b = e.target.closest("[data-key]"); if (b && !b.disabled) selectDate(b.dataset.key); });
-$("recent").addEventListener("click", (e) => { const b = e.target.closest("[data-key]"); if (b) { selectDate(b.dataset.key); window.scrollTo({ top: 0, behavior: "smooth" }); } });
+$("recent").addEventListener("click", (e) => { const b = e.target.closest("[data-id]"); if (b) { selectDate(b.dataset.key, b.dataset.id); window.scrollTo({ top: 0, behavior: "smooth" }); } });
 
 renderLegend();
 loadForm();
