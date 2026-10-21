@@ -119,6 +119,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 .row .tags { color: var(--muted); font-size: 0.85rem; }
 .row .note { margin: 2px 0 0; overflow-wrap: anywhere; }
 .empty { color: var(--muted); padding: 8px 0; }
+.filebtn { border: 1px solid var(--line); color: var(--fg); padding: 9px 18px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+.filebtn:hover { background: var(--surface-2); }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-size: 0.9rem; }
 @media (prefers-reduced-motion: reduce) { .face { transition: none; } .face[aria-pressed="true"] { transform: none; } }
 </style>
@@ -189,6 +191,17 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
     <h2 id="recentTitle">Recent check-ins</h2>
     <div class="recent" id="recent"><p class="empty">Loading your check-ins…</p></div>
   </section>
+
+  <section class="card" aria-labelledby="dataTitle">
+    <h2 id="dataTitle">Your data</h2>
+    <p class="sub" id="dataInfo">Export your check-ins to keep a copy or move them to another device. Importing adds check-ins from a file and keeps the ones already here.</p>
+    <div class="actions">
+      <button class="primary" id="exportBtn">Export check-ins</button>
+      <label class="filebtn" for="importFile">Import check-ins</label>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <span class="status" id="dataStatus"></span>
+    </div>
+  </section>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -223,6 +236,7 @@ function faceSVG(mood, size = 54) {
 
 // ---------- storage ----------
 // One document per check-in. Ids are "<date>_<suffix>"; early check-ins used the bare date as id and have no time.
+const APP_MODE = window.MOOD_APP_MODE === "app"; // set by the installable build (docs/)
 let entries = new Map();
 let days = new Map();
 let store = null;
@@ -246,6 +260,7 @@ function localStore() {
     subscribe(fn) { listener = fn; fn(read()); },
     async save(id, data) { const o = read(); o[id] = data; write(o); listener(o); },
     async remove(id) { const o = read(); delete o[id]; write(o); listener(o); },
+    async saveMany(items) { const o = read(); items.forEach(([id, d]) => (o[id] = d)); write(o); listener(o); },
   };
 }
 
@@ -261,6 +276,7 @@ function dbStore(db) {
     },
     save: (id, data) => col.doc(id).set(data),
     remove: (id) => col.doc(id).delete(),
+    async saveMany(items) { for (const [id, d] of items) await col.doc(id).set(d); },
   };
 }
 
@@ -268,11 +284,14 @@ function showBanner(t) { $("banner").textContent = t; $("banner").hidden = false
 
 async function initStore() {
   let db = null;
-  try { db = window.claude?.use ? await window.claude.use("db") : null; } catch { db = null; }
+  try { db = !APP_MODE && window.claude?.use ? await window.claude.use("db") : null; } catch { db = null; }
   if (db) store = dbStore(db);
   else {
     store = localStore();
-    showBanner("Your account storage isn't available in this view, so check-ins are saved in this browser only.");
+    if (APP_MODE) {
+      try { navigator.storage?.persist?.(); } catch {}
+      $("dataInfo").textContent = "Check-ins in this app are saved on this device only. Use export and import to copy them to or from the claude.ai version or another phone. Importing keeps the check-ins already here.";
+    } else showBanner("Your account storage isn't available in this view, so check-ins are saved in this browser only.");
   }
   store.subscribe((o) => {
     entries = new Map(Object.entries(o).filter(([, e]) => e && e.date && e.mood));
@@ -488,6 +507,41 @@ $("prevMonth").addEventListener("click", () => { viewMonth = new Date(viewMonth.
 $("nextMonth").addEventListener("click", () => { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); renderCalendar(); });
 $("cal").addEventListener("click", (e) => { const b = e.target.closest("[data-key]"); if (b && !b.disabled) selectDate(b.dataset.key); });
 $("recent").addEventListener("click", (e) => { const b = e.target.closest("[data-id]"); if (b) { selectDate(b.dataset.key, b.dataset.id); window.scrollTo({ top: 0, behavior: "smooth" }); } });
+
+// ---------- export & import ----------
+$("exportBtn").addEventListener("click", async () => {
+  const data = JSON.stringify({ app: "daily-mood-log", version: 1, exportedAt: new Date().toISOString(), entries: Object.fromEntries(entries) }, null, 2);
+  const filename = `mood-log-${todayKey()}.json`;
+  $("dataStatus").textContent = "";
+  let downloads = null;
+  try { downloads = !APP_MODE && window.claude?.use ? await window.claude.use("downloads") : null; } catch {}
+  if (downloads) {
+    try { await downloads.save({ filename, data }); }
+    catch (e) { if (e?.code !== "declined") $("dataStatus").textContent = "Couldn't export right now. Try again in a moment."; }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+  a.download = filename;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$("importFile").addEventListener("change", async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = "";
+  if (!file) return;
+  try {
+    const parsed = JSON.parse(await file.text());
+    const incoming = Object.entries(parsed.entries || {}).filter(([id, e]) => /^[\w.~:@+-]{1,200}$/.test(id) && e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && e.mood >= 1 && e.mood <= 5);
+    const fresh = incoming.filter(([id, e]) => !entries.has(id) || (e.updatedAt || "") > (entries.get(id).updatedAt || ""));
+    if (!incoming.length) { $("dataStatus").textContent = "That file has no check-ins in it. Pick a file made with Export check-ins."; return; }
+    $("dataStatus").textContent = "Importing…";
+    await store.saveMany(fresh.map(([id, e]) => [id, { date: e.date, time: e.time || "", mood: Number(e.mood), tags: Array.isArray(e.tags) ? e.tags.map(String) : [], note: String(e.note || ""), updatedAt: e.updatedAt || new Date().toISOString() }]));
+    $("dataStatus").textContent = fresh.length ? `Imported ${fresh.length} check-in${fresh.length === 1 ? "" : "s"}.` : "Everything in that file is already here.";
+  } catch {
+    $("dataStatus").textContent = "Couldn't read that file. Pick a file made with Export check-ins.";
+  }
+});
 
 renderLegend();
 loadForm();
