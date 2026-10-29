@@ -1,4 +1,4 @@
-// Renders the app icons into docs/ with Playwright. Run: node scripts/make-icons.mjs
+// Renders the app icons into the repo root with Playwright. Run: node scripts/make-icons.mjs
 // (needs Playwright; set PLAYWRIGHT_MODULE to its path if it isn't installed locally)
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
 const face = (scale) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
@@ -15,7 +15,7 @@ const page = await browser.newPage();
 for (const [file, size, scale] of [["icon-192.png", 192, 7.2], ["icon-512.png", 512, 7.2], ["icon-maskable-512.png", 512, 5.6]]) {
   await page.setViewportSize({ width: size, height: size });
   await page.setContent(`<style>body{margin:0}svg{display:block;width:${size}px;height:${size}px}</style>${face(scale)}`);
-  await page.screenshot({ path: new URL(`../docs/${file}`, import.meta.url).pathname });
+  await page.screenshot({ path: new URL(`../${file}`, import.meta.url).pathname });
 }
 await browser.close();
-console.log("Icons written to docs/");
+console.log("Icons written to the repo root");
