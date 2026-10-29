@@ -24,6 +24,7 @@ node scripts/make-icons.mjs     # icons (only when the icon changes; needs Playw
   `{ date: "YYYY-MM-DD", time: "HH:MM", mood (1-5), tags: [], note, updatedAt }`
   Ids are `<date>_<suffix>`. The earliest check-ins used the bare date as their id and have no `time`; the app reads both.
 - The calendar colors each day by the average of its check-ins.
+- The switch at the top right picks Auto (follows your phone), Light or Dark. The choice is saved under `nurnhe-theme`, shared with the other apps on nurnhe.github.io, so switching it in one switches them all.
 - Outside claude.ai (the phone app, or the file opened directly) it saves in the browser's local storage.
 
 ## Roadmap
