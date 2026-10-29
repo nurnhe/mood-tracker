@@ -20,7 +20,7 @@
 <style>
 /* Layout: a check-in card beside a mood-colored month, recent days underneath; one column on phones */
 :root {
-  /* One bright, warm look in every theme: peach-to-sky wash, white cards, watermelon accent */
+  /* Light: peach-to-sky wash, white cards, watermelon accent. Each mood retints it below. */
   --bg: #fff6ef;
   --wash: linear-gradient(165deg, #ffefe3 0%, #fff8f1 35%, #f3f6ff 75%, #e9f7f4 100%);
   --surface: #ffffff;
@@ -50,6 +50,21 @@
 :root[data-mood="3"] { --bg: #f1fbf6; --wash: linear-gradient(165deg, #dff7ea 0%, #f3fcf7 45%, #f0f9fb 100%); --surface-2: #e8f8ef; --line: #d3ecdf; --accent: #23935f; --accent-soft: #d3f2e2; --shadow: 0 6px 24px rgba(35, 147, 95, 0.10); }
 :root[data-mood="4"] { --bg: #fffaea; --wash: linear-gradient(165deg, #fff1c4 0%, #fffaeb 45%, #fff4e4 100%); --surface-2: #fff5d8; --line: #f3e4bb; --accent: #c0650c; --accent-soft: #ffecbb; --shadow: 0 6px 24px rgba(214, 150, 20, 0.12); }
 :root[data-mood="5"] { --bg: #fff4ee; --wash: linear-gradient(165deg, #ffe0d3 0%, #fff2ea 45%, #fff0f4 100%); --surface-2: #ffeee6; --line: #f6d8cc; --accent: #e34a4f; --accent-soft: #ffdcd3; --shadow: 0 6px 24px rgba(227, 74, 79, 0.12); }
+/* Dark mode keeps the mood colors: deep, saturated tints rather than grey */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #241a2e; --wash: linear-gradient(165deg, #3d2342 0%, #271c35 45%, #1c2b3c 100%); --surface: #30233f; --surface-2: #3b2c4e; --line: #4a3a5e; --accent: #ff7f8a; --accent-soft: #5e2e48; --accent-fg: #2a1020; --fg: #fbf4ff; --muted: #cdbfda; --face-ink: #241a2e; --danger: #ff96a2; --shadow: 0 8px 28px rgba(0, 0, 0, 0.28); color-scheme: dark; }
+  :root:not([data-theme="light"])[data-mood="1"] { --bg: #1e2149; --wash: linear-gradient(165deg, #2a3170 0%, #1f2350 45%, #2d2256 100%); --surface: #292e60; --surface-2: #343a72; --line: #414884; --accent: #adb5ff; --accent-soft: #3c4394; --accent-fg: #161a3d; }
+  :root:not([data-theme="light"])[data-mood="2"] { --bg: #13304a; --wash: linear-gradient(165deg, #134467 0%, #15324e 45%, #172a4e 100%); --surface: #1b3e5e; --surface-2: #234b6e; --line: #2d5879; --accent: #82d6ff; --accent-soft: #1f5679; --accent-fg: #0d2436; }
+  :root:not([data-theme="light"])[data-mood="3"] { --bg: #133a31; --wash: linear-gradient(165deg, #145243 0%, #153a32 45%, #133944 100%); --surface: #1a4a3f; --surface-2: #22584b; --line: #2b6554; --accent: #80f0b8; --accent-soft: #1f6551; --accent-fg: #0c2a20; }
+  :root:not([data-theme="light"])[data-mood="4"] { --bg: #3b2d14; --wash: linear-gradient(165deg, #624812 0%, #413116 45%, #4c2e1a 100%); --surface: #4a3a1b; --surface-2: #574622; --line: #68532a; --accent: #ffd36b; --accent-soft: #6e5622; --accent-fg: #2e2208; }
+  :root:not([data-theme="light"])[data-mood="5"] { --bg: #3e1d25; --wash: linear-gradient(165deg, #66262c 0%, #421e28 45%, #4c2133 100%); --surface: #4e2631; --surface-2: #5d2e3a; --line: #6e3744; --accent: #ffa082; --accent-soft: #733730; --accent-fg: #2e1210; }
+}
+:root[data-theme="dark"] { --bg: #241a2e; --wash: linear-gradient(165deg, #3d2342 0%, #271c35 45%, #1c2b3c 100%); --surface: #30233f; --surface-2: #3b2c4e; --line: #4a3a5e; --accent: #ff7f8a; --accent-soft: #5e2e48; --accent-fg: #2a1020; --fg: #fbf4ff; --muted: #cdbfda; --face-ink: #241a2e; --danger: #ff96a2; --shadow: 0 8px 28px rgba(0, 0, 0, 0.28); color-scheme: dark; }
+:root[data-theme="dark"][data-mood="1"] { --bg: #1e2149; --wash: linear-gradient(165deg, #2a3170 0%, #1f2350 45%, #2d2256 100%); --surface: #292e60; --surface-2: #343a72; --line: #414884; --accent: #adb5ff; --accent-soft: #3c4394; --accent-fg: #161a3d; }
+:root[data-theme="dark"][data-mood="2"] { --bg: #13304a; --wash: linear-gradient(165deg, #134467 0%, #15324e 45%, #172a4e 100%); --surface: #1b3e5e; --surface-2: #234b6e; --line: #2d5879; --accent: #82d6ff; --accent-soft: #1f5679; --accent-fg: #0d2436; }
+:root[data-theme="dark"][data-mood="3"] { --bg: #133a31; --wash: linear-gradient(165deg, #145243 0%, #153a32 45%, #133944 100%); --surface: #1a4a3f; --surface-2: #22584b; --line: #2b6554; --accent: #80f0b8; --accent-soft: #1f6551; --accent-fg: #0c2a20; }
+:root[data-theme="dark"][data-mood="4"] { --bg: #3b2d14; --wash: linear-gradient(165deg, #624812 0%, #413116 45%, #4c2e1a 100%); --surface: #4a3a1b; --surface-2: #574622; --line: #68532a; --accent: #ffd36b; --accent-soft: #6e5622; --accent-fg: #2e2208; }
+:root[data-theme="dark"][data-mood="5"] { --bg: #3e1d25; --wash: linear-gradient(165deg, #66262c 0%, #421e28 45%, #4c2133 100%); --surface: #4e2631; --surface-2: #5d2e3a; --line: #6e3744; --accent: #ffa082; --accent-soft: #733730; --accent-fg: #2e1210; }
 .primary, .chip, .slot, .face, .card { transition: background-color .3s ease, border-color .3s ease, color .3s ease; }
 * { box-sizing: border-box; }
 body {
@@ -344,13 +359,18 @@ function allTags() {
 }
 
 const THEME_TOP = { 0: "#ffefe3", 1: "#e6e9ff", 2: "#dff2fd", 3: "#dff7ea", 4: "#fff1c4", 5: "#ffe0d3" };
+const THEME_TOP_DARK = { 0: "#3d2342", 1: "#2a3170", 2: "#134467", 3: "#145243", 4: "#624812", 5: "#66262c" };
+const isDark = () => {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+};
 function applyMoodTint() {
   // The mood being picked wins; otherwise the latest check-in of the day shown.
   const list = days.get(selected) || [];
   const mood = form.mood || (list.length ? list[list.length - 1].mood : 0);
   const root = document.documentElement;
   if (mood) root.dataset.mood = mood; else delete root.dataset.mood;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_TOP[mood]);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", (isDark() ? THEME_TOP_DARK : THEME_TOP)[mood]);
 }
 
 function renderForm() {
@@ -566,6 +586,7 @@ $("importFile").addEventListener("change", async (ev) => {
   }
 });
 
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", applyMoodTint);
 renderLegend();
 loadForm();
 renderAll();
