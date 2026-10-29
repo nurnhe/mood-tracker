@@ -12,8 +12,7 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#f3f2f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#17151f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffefe3">
 <meta name="description" content="A quick daily mood check-in with a month calendar colored by mood.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -38,8 +37,8 @@ const manifest = {
   start_url: "./",
   scope: "./",
   display: "standalone",
-  background_color: "#f3f2f7",
-  theme_color: "#5b4bc4",
+  background_color: "#fff6ef",
+  theme_color: "#ffefe3",
   icons: [
     { src: "icon-192.png", sizes: "192x192", type: "image/png" },
     { src: "icon-512.png", sizes: "512x512", type: "image/png" },
